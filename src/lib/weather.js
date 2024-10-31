@@ -76,5 +76,6 @@ export async function weatherSearch(lat, lng) {
     return parseResponse(data);
   }
 
+
   return [];
 }

@@ -19,6 +19,11 @@ import { weatherSearch } from './lib/weather.js';
  */
 const locations = [
   {
+    title: 'Mín staðsetning',
+    lat: null,
+    lng: null,
+  },
+  {
     title: 'Reykjavík',
     lat: 64.1355,
     lng: -21.8954,
@@ -71,30 +76,35 @@ function renderResults(location, results) {
   const header = el(
     'tr',
     {},
-    el('th', {}, 'Tími'),
-    el('th', {}, 'Hiti'),
-    el('th', {}, 'Úrkoma'),
-  );
-  console.log(results);
-  const body = el(
-    'tr',
-    {},
-    el('td', {}, 'Tími'),
-    el('td', {}, 'Hiti'),
-    el('td', {}, 'Úrkoma'),
+    el('th', {}, 'Klukkutími'),
+    el('th', {}, 'Hiti (°C)'),
+    el('th', {}, 'Úrkoma (mm)')
   );
 
-  const resultsTable = el('table', { class: 'forecast' }, header, body);
+  const bodyRows = results.map((forecast) => 
+    el(
+      'tr',
+      {},
+      el('td', {}, forecast.time.slice(11, 16)), 
+      el('td', {}, forecast.temperature),
+      el('td', {}, forecast.precipitation === 0 ? '0' : forecast.precipitation)
+    )
+  );
+
+  const resultsTable = el('table', { class: 'forecast' }, header, ...bodyRows);
 
   renderIntoResultsContent(
     el(
       'section',
       {},
-      el('h2', {}, `Leitarniðurstöður fyrir: ${location.title}`),
-      resultsTable,
-    ),
+      el('h2', {}, location.title),
+      el('p', {}, `Spá fyrir daginn í breiddargráðu ${location.lat.toFixed(4)} og lengdargráðu ${location.lng.toFixed(4)}`), // Display coordinates
+      resultsTable
+    )
   );
 }
+
+
 
 /**
  * Birta villu í viðmóti.
@@ -140,8 +150,27 @@ async function onSearch(location) {
  * Biður notanda um leyfi gegnum vafra.
  */
 async function onSearchMyLocation() {
-  // TODO útfæra
+  if (!navigator.geolocation) {
+    renderError(new Error("Geolocation is not supported by your browser"));
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    async (position) => {
+      const { latitude, longitude } = position.coords;
+      renderLoading();
+      try {
+        const results = await weatherSearch(latitude, longitude);
+        renderResults({ title: "Núverandi staðsetning", lat: latitude, lng: longitude }, results);
+      } catch (error) {
+        renderError(error);
+      }
+    },
+    () => {
+      renderError(new Error("Gat ekki sótt staðsetningu"));
+    }
+  );
 }
+
 
 /**
  * Býr til takka fyrir staðsetningu.
@@ -181,35 +210,32 @@ function renderLocationButton(locationTitle, onSearch) {
  * @param {() => void} onSearchMyLocation
  */
 function render(container, locations, onSearch, onSearchMyLocation) {
-  // Búum til <main> og setjum `weather` class
   const parentElement = document.createElement('main');
   parentElement.classList.add('weather');
 
-  // Búum til <header> með beinum DOM aðgerðum
   const headerElement = document.createElement('header');
   const heading = document.createElement('h1');
-  heading.appendChild(document.createTextNode('<fyrirsögn>'));
+  heading.appendChild(document.createTextNode('Veðrið'));
   headerElement.appendChild(heading);
+
+  const subtitle = document.createElement('p');
+  subtitle.textContent = 'Veldu stað til að sjá hita- og úrkomuspá.';
+  headerElement.appendChild(subtitle);
+
   parentElement.appendChild(headerElement);
 
-  // TODO útfæra inngangstexta
-  // Búa til <div class="loctions">
   const locationsElement = document.createElement('div');
   locationsElement.classList.add('locations');
 
-  // Búa til <ul class="locations__list">
   const locationsListElement = document.createElement('ul');
   locationsListElement.classList.add('locations__list');
-
-  // <div class="loctions"><ul class="locations__list"></ul></div>
   locationsElement.appendChild(locationsListElement);
 
-  // <div class="loctions"><ul class="locations__list"><li><li><li></ul></div>
   for (const location of locations) {
-    const liButtonElement = renderLocationButton(location.title, () => {
-      console.log('Halló!!', location);
-      onSearch(location);
-    });
+    const buttonClickHandler =
+      location.title === 'Mín staðsetning' ? onSearchMyLocation : () => onSearch(location);
+
+    const liButtonElement = renderLocationButton(location.title, buttonClickHandler);
     locationsListElement.appendChild(liButtonElement);
   }
 
@@ -221,6 +247,7 @@ function render(container, locations, onSearch, onSearchMyLocation) {
 
   container.appendChild(parentElement);
 }
+
 
 // Þetta fall býr til grunnviðmót og setur það í `document.body`
 render(document.body, locations, onSearch, onSearchMyLocation);
